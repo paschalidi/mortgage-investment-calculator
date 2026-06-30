@@ -1,8 +1,23 @@
+import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import {
+  calculateMortgage,
+  calculateInvestmentGrowth,
+  calculateDividendTax,
+  calculateBudget,
+  calculateAgeAtEnd,
+  calculateANI,
+  calculateTakeHome,
+  DEFAULT_TAX_YEAR_2025_26,
+} from '@/lib/calculations'
+import { AssumptionsPanel } from '@/components/AssumptionsPanel'
+import { TaxDashboard } from '@/components/TaxDashboard'
+import { PensionProjection } from '@/components/PensionProjection'
+import type { WorkplacePot, PersonalPot, PartnerPot } from '@/lib/calculations'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -16,11 +31,10 @@ function Index() {
   // Budget State
   const [myIncome, setMyIncome] = useLocalStorage<number>('myIncome', 4000)
   const [partnerIncome, setPartnerIncome] = useLocalStorage<number>('partnerIncome', 3500)
-  
+
   // Personal Expenses
   const [myPersonalExpenses, setMyPersonalExpenses] = useLocalStorage<number>('myPersonalExpenses', 200)
   const [partnerPersonalExpenses, setPartnerPersonalExpenses] = useLocalStorage<number>('partnerPersonalExpenses', 200)
-  const [myPension, setMyPension] = useLocalStorage<number>('myPension', 300)
   const [partnerPension, setPartnerPension] = useLocalStorage<number>('partnerPension', 250)
   const [myTherapy, setMyTherapy] = useLocalStorage<number>('myTherapy', 0)
   const [partnerTherapy, setPartnerTherapy] = useLocalStorage<number>('partnerTherapy', 0)
@@ -35,7 +49,38 @@ function Index() {
     shopping: 300,
     entertainment: 150,
     other: 100,
+    gym: 50,
+    subscriptions: 50,
+    diningOut: 0,
+    coffee: 0,
+    pets: 0,
+    car: 200,
+    phone: 40,
+    internet: 35,
+    clothing: 0,
+    gifts: 0,
+    charity: 0,
+    homeMaintenance: 50,
   })
+
+  // --- Migration: ensure new expense keys exist in localStorage ---
+  useEffect(() => {
+    const newDefaults: Record<string, number> = {
+      gym: 50, subscriptions: 50, diningOut: 0, coffee: 0, pets: 0,
+      car: 200, phone: 40, internet: 35, clothing: 0, gifts: 0, charity: 0, homeMaintenance: 50,
+    }
+    let needsUpdate = false
+    const next = { ...expenses }
+    for (const [key, defaultValue] of Object.entries(newDefaults)) {
+      if ((next as Record<string, number>)[key] === undefined) {
+        (next as Record<string, number>)[key] = defaultValue
+        needsUpdate = true
+      }
+    }
+    if (needsUpdate) {
+      setExpenses(next)
+    }
+  }, [])
 
   // Mortgage State
   const [principal, setPrincipal] = useLocalStorage<number>('principal', 461000)
@@ -51,142 +96,121 @@ function Index() {
   const [invTermYears, setInvTermYears] = useLocalStorage<number>('invTermYears', 20)
   const [dividendYield, setDividendYield] = useLocalStorage<number>('dividendYield', 4.0)
 
+  // Tax & ANI State
+  const [grossSalary, setGrossSalary] = useLocalStorage<number>('grossSalary', 110000)
+  const [pensionSacrifice, setPensionSacrifice] = useLocalStorage<number>('pensionSacrifice', 11000)
+  const [taxConfig, setTaxConfig] = useLocalStorage('taxConfig', DEFAULT_TAX_YEAR_2025_26)
+
+  // Pension State
+  const [workplacePot, setWorkplacePot] = useLocalStorage<WorkplacePot>('workplacePot', {
+    currentValue: 2000,
+    monthlySacrifice: 916.67,
+    employerMatchPercent: 5,
+    matchBaseSalary: 110000,
+    realGrowthRate: 0.04,
+    amc: 0.003,
+    contributionCharge: 0.018,
+    accessMode: 'drawdown',
+    retirementAge: 57,
+  })
+  const [personalPot, setPersonalPot] = useLocalStorage<PersonalPot>('personalPot', {
+    currentValue: 40000,
+    monthlyContribution: 400,
+    realGrowthRate: 0.04,
+    startYear: 2019,
+    ukTaxRelief: false,
+    accessMode: 'drawdown',
+    retirementAge: 57,
+  })
+  const [partnerPot, setPartnerPot] = useLocalStorage<PartnerPot>('partnerPot', {
+    monthlyContribution: 0,
+  })
+  const [retirementAge, setRetirementAge] = useLocalStorage<number>('retirementAge', 57)
+
+  // --- Derived: My Income from Tax Engine ---
+  useEffect(() => {
+    const ani = calculateANI(grossSalary, pensionSacrifice, taxConfig)
+    const { takeHomeMonthly } = calculateTakeHome(ani, taxConfig)
+    if (Math.abs(takeHomeMonthly - myIncome) > 0.01) {
+      setMyIncome(takeHomeMonthly)
+    }
+  }, [grossSalary, pensionSacrifice, taxConfig, myIncome, setMyIncome])
+
   // --- Mortgage Calculations ---
-  // Monthly interest rate
-  const r_m = interestRate / 100 / 12
-  // Total number of payments
-  const n = years * 12
-
-  // Standard monthly payment (M = P [ i(1 + i)^n ] / [ (1 + i)^n - 1])
-  const standardMonthlyPayment = r_m > 0 ? principal * (r_m * Math.pow(1 + r_m, n)) / (Math.pow(1 + r_m, n) - 1) : principal / (n || 1)
-
-  const totalMonthlyPayment = standardMonthlyPayment + overpayment;
-
-  // Calculate payoff time and total interest with overpayment
-  let remainingBalance = principal
-  let monthsToPayoff = 0
-  let totalInterestWithOverpayment = 0
-  let totalPaidWithOverpayment = 0
-
-  while (remainingBalance > 0 && monthsToPayoff < 1200) { // cap at 100 years
-    const interestForMonth = remainingBalance * r_m
-    totalInterestWithOverpayment += interestForMonth
-
-    let principalPayment = totalMonthlyPayment - interestForMonth
-
-    // If payment doesn't cover interest, loan will never be paid off
-    if (principalPayment <= 0) {
-      monthsToPayoff = -1;
-      break;
-    }
-
-    if (principalPayment > remainingBalance) {
-      principalPayment = remainingBalance
-      totalPaidWithOverpayment += (remainingBalance + interestForMonth)
-    } else {
-      totalPaidWithOverpayment += totalMonthlyPayment
-    }
-
-    remainingBalance -= principalPayment
-    monthsToPayoff++
-  }
-
-  const standardTotalInterest = (standardMonthlyPayment * n) - principal
-  const standardTotalPaid = standardMonthlyPayment * n
-
-  const interestSaved = standardTotalInterest - totalInterestWithOverpayment
-  const yearsSaved = years - (monthsToPayoff / 12)
+  const {
+    standardMonthlyPayment,
+    totalMonthlyPayment,
+    monthsToPayoff,
+    totalInterestWithOverpayment,
+    totalPaidWithOverpayment,
+    standardTotalInterest,
+    standardTotalPaid,
+    interestSaved,
+    yearsSaved,
+  } = calculateMortgage({
+    principal,
+    annualRate: interestRate,
+    years,
+    monthlyOverpayment: overpayment,
+  })
 
   // --- Investment Calculations ---
-  const r_im = invReturnRate / 100 / 12
   const totalInvMonths = invTermYears * 12
 
-  let invBalance = invInitial
-  let invTotalContributed = invInitial
-  let invTotalInterest = 0
-
-  for (let month = 1; month <= totalInvMonths; month++) {
-    const isMortgagePaidOff = monthsToPayoff !== -1 && month > monthsToPayoff;
-    const C = isMortgagePaidOff ? invPhase2Contrib : invPhase1Contrib;
-
-    const I = invBalance * r_im;
-
-    invTotalInterest += I;
-    invTotalContributed += C;
-    invBalance += I + C;
-  }
+  const {
+    finalBalance: invBalance,
+    totalContributed: invTotalContributed,
+    totalInterest: invTotalInterest,
+  } = calculateInvestmentGrowth({
+    initial: invInitial,
+    annualReturnRate: invReturnRate,
+    phase1Monthly: invPhase1Contrib,
+    phase2Monthly: invPhase2Contrib,
+    termYears: invTermYears,
+    monthsToPayoffMortgage: monthsToPayoff,
+  })
 
   // --- Dividend & UK Tax Calculations ---
-  const annualDividendGross = invBalance * (dividendYield / 100);
-  const monthlyDividendGross = annualDividendGross / 12;
+  const annualDividendGross = invBalance * (dividendYield / 100)
+  const monthlyDividendGross = annualDividendGross / 12
+  const ani = calculateANI(grossSalary, pensionSacrifice, taxConfig)
 
-  // UK tax on dividends assuming NO other income (2024/25 rates)
-  // Personal Allowance: £12,570 (covers dividends if no other income)
-  // Dividend Allowance: £500 (on top of personal allowance)
-  // Basic rate band: £12,571 – £50,270 → 8.75%
-  // Higher rate band: £50,271 – £125,140 → 33.75%
-  // Additional rate: £125,141+ → 39.35%
-  const calculateDividendTax = (annual: number) => {
-    const personalAllowance = 12570;
-    const dividendAllowance = 500;
-    const basicRateLimit = 50270;
-    const higherRateLimit = 125140;
-
-    let taxable = annual;
-    // Personal allowance absorbs first £12,570
-    taxable = Math.max(0, taxable - personalAllowance);
-    // Dividend allowance absorbs next £500
-    taxable = Math.max(0, taxable - dividendAllowance);
-
-    let tax = 0;
-    // Basic rate band: from 0 up to (basicRateLimit - personalAllowance - dividendAllowance)
-    const basicBand = basicRateLimit - personalAllowance - dividendAllowance;
-    const higherBand = higherRateLimit - basicRateLimit;
-
-    if (taxable <= basicBand) {
-      tax = taxable * 0.0875;
-    } else if (taxable <= basicBand + higherBand) {
-      tax = basicBand * 0.0875 + (taxable - basicBand) * 0.3375;
-    } else {
-      tax = basicBand * 0.0875 + higherBand * 0.3375 + (taxable - basicBand - higherBand) * 0.3935;
-    }
-    return tax;
-  };
-
-  const annualDividendTax = calculateDividendTax(annualDividendGross);
-  const annualDividendNet = annualDividendGross - annualDividendTax;
-  const monthlyDividendNet = annualDividendNet / 12;
+  const {
+    annualTax: annualDividendTax,
+    annualNet: annualDividendNet,
+    monthlyNet: monthlyDividendNet,
+    effectiveRate: dividendEffectiveRate,
+  } = calculateDividendTax(annualDividendGross, ani, taxConfig)
 
   // --- Budget Calculations ---
-  const totalIncome = myIncome + partnerIncome;
-  const personalTotal = (myPersonalExpenses || 0) + (partnerPersonalExpenses || 0) + (myPension || 0) + (partnerPension || 0) + (myTherapy || 0) + (partnerTherapy || 0);
-  const baseExpenses = Object.values(expenses).reduce((acc, val) => acc + (val || 0), 0);
-  const totalExpenses = personalTotal + baseExpenses + totalMonthlyPayment + invPhase1Contrib;
-  const remainingBudget = totalIncome - totalExpenses;
+  const {
+    totalIncome,
+    baseExpenses,
+    totalExpenses,
+    remainingBudget,
+  } = calculateBudget({
+    myIncomeMonthly: myIncome,
+    partnerIncomeMonthly: partnerIncome,
+    myPersonalExpenses,
+    partnerPersonalExpenses,
+    myTherapy,
+    partnerTherapy,
+    expenses,
+    mortgageMonthlyOutgoing: totalMonthlyPayment,
+    investmentPhase1Monthly: invPhase1Contrib,
+    partnerPensionMonthly: partnerPension,
+    workplacePensionMonthly: workplacePot.monthlySacrifice,
+  })
 
   // --- Age Calculations ---
-  const calculateAgeAtEnd = (dobString: string, monthsToAdd: number) => {
-    if (!dobString) return null;
-    const birthDate = new Date(dobString);
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + monthsToAdd);
-    
-    let age = endDate.getFullYear() - birthDate.getFullYear();
-    const m = endDate.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && endDate.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const myEndAge = calculateAgeAtEnd(myDob, totalInvMonths);
-  const partnerEndAge = calculateAgeAtEnd(partnerDob, totalInvMonths);
+  const myEndAge = calculateAgeAtEnd(myDob, totalInvMonths)
+  const partnerEndAge = calculateAgeAtEnd(partnerDob, totalInvMonths)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value)
   }
 
-  const handleExpenseChange = (key: keyof typeof expenses, value: string) => {
+  const handleExpenseChange = (key: string, value: string) => {
     setExpenses(prev => ({ ...prev, [key]: Number(value) }));
   }
 
@@ -197,9 +221,24 @@ function Index() {
         <p className="text-muted-foreground">Plan your budget, mortgage amortization, and see how overpayments and investments affect your financial future.</p>
       </div>
 
+      <AssumptionsPanel config={taxConfig} onChange={setTaxConfig} />
+
+      {/* Tax & ANI Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 1: Salary, Tax & Take-Home</h2>
+        <TaxDashboard
+          grossSalary={grossSalary}
+          pensionSacrifice={pensionSacrifice}
+          config={taxConfig}
+          childcareValueAnnual={expenses.childcare * 12}
+          onGrossSalaryChange={setGrossSalary}
+          onPensionSacrificeChange={setPensionSacrifice}
+        />
+      </div>
+
       {/* Budget Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 1: Monthly Budget</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 2: Monthly Budget</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -211,13 +250,11 @@ function Index() {
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Income</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="myIncome">My Income (£)</Label>
-                    <Input 
-                      id="myIncome" 
-                      type="number" 
-                      value={myIncome === 0 ? '' : myIncome} 
-                      onChange={(e) => setMyIncome(Number(e.target.value))}
-                    />
+                    <Label htmlFor="myIncome">My Net Monthly Income</Label>
+                    <div className="p-2 bg-muted/40 rounded-md border text-sm font-medium">
+                      {formatCurrency(myIncome)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Derived from Part 1 salary & tax engine.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="partnerIncome">Partner's Income (£)</Label>
@@ -259,10 +296,6 @@ function Index() {
               <div className="space-y-4 pt-2">
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Pensions</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="myPension">My Pension Contribution (£)</Label>
-                    <Input id="myPension" type="number" value={myPension === 0 ? '' : myPension} onChange={(e) => setMyPension(Number(e.target.value))} />
-                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="partnerPension">Partner's Pension Contribution (£)</Label>
                     <Input id="partnerPension" type="number" value={partnerPension === 0 ? '' : partnerPension} onChange={(e) => setPartnerPension(Number(e.target.value))} />
@@ -309,6 +342,54 @@ function Index() {
                     <Label htmlFor="other">Other (£)</Label>
                     <Input id="other" type="number" value={expenses.other === 0 ? '' : expenses.other} onChange={(e) => handleExpenseChange('other', e.target.value)} />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gym">Gym (£)</Label>
+                    <Input id="gym" type="number" value={expenses.gym === 0 ? '' : expenses.gym} onChange={(e) => handleExpenseChange('gym', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subscriptions">Subscriptions (£)</Label>
+                    <Input id="subscriptions" type="number" value={expenses.subscriptions === 0 ? '' : expenses.subscriptions} onChange={(e) => handleExpenseChange('subscriptions', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="diningOut">Dining Out (£)</Label>
+                    <Input id="diningOut" type="number" value={expenses.diningOut === 0 ? '' : expenses.diningOut} onChange={(e) => handleExpenseChange('diningOut', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="coffee">Coffee (£)</Label>
+                    <Input id="coffee" type="number" value={expenses.coffee === 0 ? '' : expenses.coffee} onChange={(e) => handleExpenseChange('coffee', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pets">Pets (£)</Label>
+                    <Input id="pets" type="number" value={expenses.pets === 0 ? '' : expenses.pets} onChange={(e) => handleExpenseChange('pets', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="car">Car (£)</Label>
+                    <Input id="car" type="number" value={expenses.car === 0 ? '' : expenses.car} onChange={(e) => handleExpenseChange('car', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone (£)</Label>
+                    <Input id="phone" type="number" value={expenses.phone === 0 ? '' : expenses.phone} onChange={(e) => handleExpenseChange('phone', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="internet">Internet (£)</Label>
+                    <Input id="internet" type="number" value={expenses.internet === 0 ? '' : expenses.internet} onChange={(e) => handleExpenseChange('internet', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clothing">Clothing (£)</Label>
+                    <Input id="clothing" type="number" value={expenses.clothing === 0 ? '' : expenses.clothing} onChange={(e) => handleExpenseChange('clothing', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gifts">Gifts (£)</Label>
+                    <Input id="gifts" type="number" value={expenses.gifts === 0 ? '' : expenses.gifts} onChange={(e) => handleExpenseChange('gifts', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="charity">Charity (£)</Label>
+                    <Input id="charity" type="number" value={expenses.charity === 0 ? '' : expenses.charity} onChange={(e) => handleExpenseChange('charity', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="homeMaintenance">Home Maintenance (£)</Label>
+                    <Input id="homeMaintenance" type="number" value={expenses.homeMaintenance === 0 ? '' : expenses.homeMaintenance} onChange={(e) => handleExpenseChange('homeMaintenance', e.target.value)} />
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -332,8 +413,12 @@ function Index() {
                   <span className="font-medium">{formatCurrency((myPersonalExpenses || 0) + (partnerPersonalExpenses || 0))}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Pensions</span>
-                  <span className="font-medium">{formatCurrency((myPension || 0) + (partnerPension || 0))}</span>
+                  <span className="text-muted-foreground">Partner Pension</span>
+                  <span className="font-medium">{formatCurrency(partnerPension || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Workplace Pension (salary sacrifice)</span>
+                  <span className="font-medium">{formatCurrency(workplacePot.monthlySacrifice || 0)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Therapy</span>
@@ -351,7 +436,7 @@ function Index() {
                   <span className="text-muted-foreground">Investment Contribution (Phase 1)</span>
                   <span className="font-medium">{formatCurrency(invPhase1Contrib)}</span>
                 </div>
-                
+
                 <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm border-t mt-2">
                   <div className="font-medium text-muted-foreground">Total Outgoings</div>
                   <div className="text-xl font-bold text-red-600 dark:text-red-400">-{formatCurrency(totalExpenses)}</div>
@@ -375,7 +460,7 @@ function Index() {
 
       {/* Mortgage Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 2: Mortgage Amortization</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 3: Mortgage Amortization</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -517,7 +602,7 @@ function Index() {
 
       {/* Investment Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 3: Investment Growth</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 4: Investment Growth</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -716,7 +801,7 @@ function Index() {
                   <div>
                     <div className="text-sm font-medium text-muted-foreground mb-1">Effective Tax Rate</div>
                     <div className="text-xl font-semibold text-red-500">
-                      {annualDividendGross > 0 ? ((annualDividendTax / annualDividendGross) * 100).toFixed(1) : '0.0'}%
+                      {dividendEffectiveRate.toFixed(1)}%
                     </div>
                   </div>
                 </div>
@@ -730,12 +815,31 @@ function Index() {
                     <div className="text-2xl font-bold text-green-700 dark:text-green-400">{formatCurrency(monthlyDividendNet)}</div>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">UK tax calculated assuming no other income. Includes £12,570 personal allowance + £500 dividend allowance. Rates: 8.75% basic, 33.75% higher, 39.35% additional.</p>
+                <p className="text-xs text-muted-foreground">
+                  Dividends taxed on top of your salary ({formatCurrency(ani)}/yr ANI). Personal Allowance used by salary first. Includes £500 dividend allowance. Rates: 8.75% basic, 33.75% higher, 39.35% additional.
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Pension Projection Section */}
+      <PensionProjection
+        grossSalary={grossSalary}
+        config={taxConfig}
+        dob={myDob}
+        workplacePot={workplacePot}
+        personalPot={personalPot}
+        partnerPot={partnerPot}
+        retirementAge={retirementAge}
+        isaPortfolioValue={invBalance}
+        isaYieldAtRetirement={dividendYield / 100}
+        onWorkplaceChange={setWorkplacePot}
+        onPersonalChange={setPersonalPot}
+        onPartnerChange={setPartnerPot}
+        onRetirementAgeChange={setRetirementAge}
+      />
 
     </div>
   )
