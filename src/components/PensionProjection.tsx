@@ -3,12 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { WorkplacePotCard, PersonalPotCard } from './PensionPotCard'
+import { RetirementIncomeSummary } from './RetirementIncomeSummary'
 import {
   projectWorkplacePot,
   projectPersonalPot,
   calculateYearsToRetirement,
-  calculateWithdrawalStrategy,
 } from '@/lib/calculations/pension'
+import {
+  calculateRetirementPhase,
+  calculateLifetimeView,
+} from '@/lib/calculations/retirement'
 import { calculateAgeAtEnd } from '@/lib/calculations/age'
 import type { WorkplacePot, PersonalPot, PartnerPot, TaxYearConfig } from '@/lib/calculations'
 
@@ -64,35 +68,72 @@ export function PensionProjection({
     [personalPot, currentYear, personalPot.retirementAge, dob, currentAge],
   )
 
-  const withdrawalStrategy = useMemo(() => {
-    return calculateWithdrawalStrategy(
-      {
-        workplace: {
-          ...workplaceProjection,
+  const phase1 = useMemo(() => {
+    return calculateRetirementPhase({
+      phaseName: 'Phase 1: Early Retirement',
+      ageRange: `${retirementAge}–${config.statePensionAge - 1}`,
+      pensions: [
+        {
+          name: 'NEST (Workplace)',
+          projection: workplaceProjection,
           accessMode: workplacePot.accessMode,
           retirementAge: workplacePot.retirementAge,
-          name: 'Workplace',
         },
-        personal: {
-          ...personalProjection,
+        {
+          name: 'Generali (Personal)',
+          projection: personalProjection,
           accessMode: personalPot.accessMode,
           retirementAge: personalPot.retirementAge,
-          name: 'Personal',
         },
-        statePensionAnnual: config.statePensionAmount,
-        statePensionAge: config.statePensionAge,
-        retirementAge,
-        lifeExpectancy: config.lifeExpectancy,
-        swr: config.swr,
-        currentAge,
-        isaPortfolioValue,
-        isaYieldAtRetirement,
-      },
+      ],
+      statePensionAnnual: config.statePensionAmount,
+      statePensionIncluded: false,
+      isaPortfolioValue: isaPortfolioValue ?? 0,
+      isaYield: isaYieldAtRetirement ?? 0,
       config,
-    )
-  }, [workplaceProjection, workplacePot.accessMode, workplacePot.retirementAge, personalProjection, personalPot.accessMode, personalPot.retirementAge, config, retirementAge, currentAge, isaPortfolioValue, isaYieldAtRetirement])
+    })
+  }, [workplaceProjection, workplacePot.accessMode, workplacePot.retirementAge, personalProjection, personalPot.accessMode, personalPot.retirementAge, config, retirementAge, isaPortfolioValue, isaYieldAtRetirement])
 
-  const totalPotValue = (workplaceProjection?.valueAtRetirement ?? 0) + (personalProjection?.valueAtRetirement ?? 0)
+  const phase2 = useMemo(() => {
+    return calculateRetirementPhase({
+      phaseName: 'Phase 2: Full Retirement',
+      ageRange: `${config.statePensionAge}–${config.lifeExpectancy}`,
+      pensions: [
+        {
+          name: 'NEST (Workplace)',
+          projection: workplaceProjection,
+          accessMode: workplacePot.accessMode,
+          retirementAge: workplacePot.retirementAge,
+        },
+        {
+          name: 'Generali (Personal)',
+          projection: personalProjection,
+          accessMode: personalPot.accessMode,
+          retirementAge: personalPot.retirementAge,
+        },
+      ],
+      statePensionAnnual: config.statePensionAmount,
+      statePensionIncluded: true,
+      isaPortfolioValue: isaPortfolioValue ?? 0,
+      isaYield: isaYieldAtRetirement ?? 0,
+      config,
+    })
+  }, [workplaceProjection, workplacePot.accessMode, workplacePot.retirementAge, personalProjection, personalPot.accessMode, personalPot.retirementAge, config, isaPortfolioValue, isaYieldAtRetirement])
+
+  const lifetime = useMemo(() => {
+    return calculateLifetimeView({
+      workplaceProjection,
+      personalProjection,
+      isaPortfolioValue: isaPortfolioValue ?? 0,
+      retirementAge,
+      lifeExpectancy: config.lifeExpectancy,
+      swr: config.swr,
+      realGrowthRate: workplacePot.realGrowthRate,
+      phase1,
+      phase2,
+      statePensionAge: config.statePensionAge,
+    })
+  }, [workplaceProjection, personalProjection, isaPortfolioValue, retirementAge, config.lifeExpectancy, config.swr, config.statePensionAge, workplacePot.realGrowthRate, phase1, phase2])
 
   const handlePartnerChange = (value: string) => {
     const num = Number(value)
@@ -159,69 +200,18 @@ export function PensionProjection({
         </Card>
       </div>
 
-      {/* Retirement Income Summary */}
       <Card className="bg-slate-50 dark:bg-slate-900 border-primary/20">
         <CardHeader>
           <CardTitle>Retirement Income Summary</CardTitle>
           <CardDescription>Combined pots, State Pension, and drawdown strategy at age {retirementAge}.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
-              <div className="text-sm font-medium text-primary mb-1">Total Pot Value</div>
-              <div className="text-3xl font-bold text-primary">{formatCurrency(totalPotValue)}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Workplace {formatCurrency(workplaceProjection.valueAtRetirement)} + Personal {formatCurrency(personalProjection.valueAtRetirement)}
-              </div>
-            </div>
-
-            <div className="p-4 bg-green-100 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
-              <div className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">Annual Retirement Income</div>
-              <div className="text-3xl font-bold text-green-700 dark:text-green-400">{formatCurrency(withdrawalStrategy.annualIncome)}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                From unlocked pots + State Pension
-              </div>
-            </div>
-
-            <div className="p-4 bg-muted/40 rounded-lg border">
-              <div className="text-sm font-medium text-muted-foreground mb-1">Drawdown Runway</div>
-              <div className="text-3xl font-bold">{withdrawalStrategy.drawdownRunwayYears} years</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Funds last until age {retirementAge + withdrawalStrategy.drawdownRunwayYears}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Income Breakdown by Source</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {withdrawalStrategy.sources.map((source) => (
-                <div key={source.name} className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-sm">
-                  <span className="text-muted-foreground">{source.name}</span>
-                  <span className={`font-semibold ${source.annualAmount > 0 ? '' : 'text-muted-foreground'}`}>
-                    {source.annualAmount > 0 ? formatCurrency(source.annualAmount) : 'Locked'}
-                  </span>
-                </div>
-              ))}
-              {/* State Pension is only shown in sources if currentAge >= statePensionAge; always show it separately for clarity */}
-              {currentAge < config.statePensionAge && (
-                <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-sm">
-                  <span className="text-muted-foreground">State Pension</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(config.statePensionAmount)}/yr from age {config.statePensionAge}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {withdrawalStrategy.taxFreeLumpSum > 0 && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
-              <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Tax-Free Lump Sum (TFLS)</div>
-              <div className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(withdrawalStrategy.taxFreeLumpSum)}</div>
-              <p className="text-xs text-muted-foreground mt-1">25% of each drawdown pot taken at retirement.</p>
-            </div>
-          )}
+        <CardContent>
+          <RetirementIncomeSummary
+            phase1={phase1}
+            phase2={phase2}
+            lifetime={lifetime}
+            retirementAge={retirementAge}
+          />
         </CardContent>
       </Card>
     </div>

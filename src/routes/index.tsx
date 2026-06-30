@@ -119,8 +119,8 @@ function Index() {
     realGrowthRate: 0.04,
     startYear: 2019,
     ukTaxRelief: false,
-    accessMode: 'locked',
-    retirementAge: 67,
+    accessMode: 'drawdown',
+    retirementAge: 57,
   })
   const [partnerPot, setPartnerPot] = useLocalStorage<PartnerPot>('partnerPot', {
     monthlyContribution: 0,
