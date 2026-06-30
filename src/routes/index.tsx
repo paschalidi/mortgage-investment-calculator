@@ -9,7 +9,10 @@ import {
   calculateDividendTax,
   calculateBudget,
   calculateAgeAtEnd,
+  DEFAULT_TAX_YEAR_2025_26,
 } from '@/lib/calculations'
+import { AssumptionsPanel } from '@/components/AssumptionsPanel'
+import { TaxDashboard } from '@/components/TaxDashboard'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -57,6 +60,11 @@ function Index() {
   const [invPhase2Contrib, setInvPhase2Contrib] = useLocalStorage<number>('invPhase2Contrib', 3000)
   const [invTermYears, setInvTermYears] = useLocalStorage<number>('invTermYears', 20)
   const [dividendYield, setDividendYield] = useLocalStorage<number>('dividendYield', 4.0)
+
+  // Tax & ANI State
+  const [grossSalary, setGrossSalary] = useLocalStorage<number>('grossSalary', 110000)
+  const [pensionSacrifice, setPensionSacrifice] = useLocalStorage<number>('pensionSacrifice', 11000)
+  const [taxConfig, setTaxConfig] = useLocalStorage('taxConfig', DEFAULT_TAX_YEAR_2025_26)
 
   // --- Mortgage Calculations ---
   const {
@@ -140,6 +148,8 @@ function Index() {
         <h1 className="text-3xl font-bold tracking-tight">Financial Modeler</h1>
         <p className="text-muted-foreground">Plan your budget, mortgage amortization, and see how overpayments and investments affect your financial future.</p>
       </div>
+
+      <AssumptionsPanel config={taxConfig} onChange={setTaxConfig} />
 
       {/* Budget Section */}
       <div className="space-y-4">
@@ -679,6 +689,19 @@ function Index() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Tax & ANI Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 5: Tax & ANI Engine</h2>
+        <TaxDashboard
+          grossSalary={grossSalary}
+          pensionSacrifice={pensionSacrifice}
+          config={taxConfig}
+          childcareValueAnnual={expenses.childcare * 12}
+          onGrossSalaryChange={setGrossSalary}
+          onPensionSacrificeChange={setPensionSacrifice}
+        />
       </div>
 
     </div>
