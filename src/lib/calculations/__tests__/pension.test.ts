@@ -348,4 +348,70 @@ describe('calculateWithdrawalStrategy', () => {
     expect(strategy.annualIncome).toBeCloseTo(expectedAnnuity, 0)
     expect(strategy.taxableIncome).toBeCloseTo(expectedAnnuity, 0)
   })
+
+  it('includes ISA yield when portfolio and yield are provided', () => {
+    const strategy = calculateWithdrawalStrategy(
+      {
+        workplace: {
+          valueAtRetirement: 580500,
+          totalContributed: 372669,
+          totalGrowth: 207831,
+          yearsToRetirement: 23,
+          accessMode: 'drawdown',
+          retirementAge: 57,
+        },
+        statePensionAnnual: 11502,
+        statePensionAge: 67,
+        retirementAge: 57,
+        lifeExpectancy: 95,
+        swr: 0.035,
+        currentAge: 34,
+        isaPortfolioValue: 500000,
+        isaYieldAtRetirement: 0.04,
+      },
+      DEFAULT_TAX_YEAR_2025_26,
+    )
+
+    const isaSource = strategy.sources.find(
+      (s) => s.name === 'ISA/GIA bonds yield',
+    )
+    expect(isaSource).toBeDefined()
+    expect(isaSource!.annualAmount).toBeCloseTo(20000, 0)
+    expect(isaSource!.taxFree).toBe(true)
+
+    const expectedWorkplaceAnnual = (580500 * 0.75) / 38
+    expect(strategy.annualIncome).toBeCloseTo(
+      expectedWorkplaceAnnual + 20000,
+      0,
+    )
+  })
+
+  it('ignores ISA yield when portfolio value is zero', () => {
+    const strategy = calculateWithdrawalStrategy(
+      {
+        workplace: {
+          valueAtRetirement: 580500,
+          totalContributed: 372669,
+          totalGrowth: 207831,
+          yearsToRetirement: 23,
+          accessMode: 'drawdown',
+          retirementAge: 57,
+        },
+        statePensionAnnual: 11502,
+        statePensionAge: 67,
+        retirementAge: 57,
+        lifeExpectancy: 95,
+        swr: 0.035,
+        currentAge: 34,
+        isaPortfolioValue: 0,
+        isaYieldAtRetirement: 0.04,
+      },
+      DEFAULT_TAX_YEAR_2025_26,
+    )
+
+    const isaSource = strategy.sources.find(
+      (s) => s.name === 'ISA/GIA bonds yield',
+    )
+    expect(isaSource).toBeUndefined()
+  })
 })

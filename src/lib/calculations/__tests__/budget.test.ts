@@ -35,16 +35,16 @@ describe('calculateBudget', () => {
       },
       mortgageMonthlyOutgoing: 2974.3904218141543,
       investmentPhase1Monthly: 1000,
-      myPensionMonthly: 300,
       partnerPensionMonthly: 250,
+      workplacePensionMonthly: 0,
     })
 
     // Captured snapshot values from legacy inline code (index.tsx lines 160-165)
     expect(result.totalIncome).toBe(7500)
-    expect(result.personalTotal).toBe(950)
+    expect(result.personalTotal).toBe(650)
     expect(result.baseExpenses).toBe(2750)
-    expect(result.totalExpenses).toBeCloseTo(7674.390421814154, 10)
-    expect(result.remainingBudget).toBeCloseTo(-174.39042181415425, 10)
+    expect(result.totalExpenses).toBeCloseTo(7374.390421814154, 10)
+    expect(result.remainingBudget).toBeCloseTo(125.60957818584575, 10)
   })
 
   it('empty/zero expenses do not crash', () => {
@@ -80,8 +80,8 @@ describe('calculateBudget', () => {
       },
       mortgageMonthlyOutgoing: 0,
       investmentPhase1Monthly: 0,
-      myPensionMonthly: 0,
       partnerPensionMonthly: 0,
+      workplacePensionMonthly: 0,
     })
 
     expect(result.totalIncome).toBe(5000)

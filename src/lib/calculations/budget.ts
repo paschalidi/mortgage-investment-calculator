@@ -11,15 +11,14 @@ export function calculateBudget(inputs: BudgetInputs): BudgetResult {
     expenses,
     mortgageMonthlyOutgoing,
     investmentPhase1Monthly,
-    myPensionMonthly,
     partnerPensionMonthly,
+    workplacePensionMonthly,
   } = inputs
 
   const totalIncome = myIncomeMonthly + partnerIncomeMonthly
   const personalTotal =
     (myPersonalExpenses || 0) +
     (partnerPersonalExpenses || 0) +
-    (myPensionMonthly || 0) +
     (partnerPensionMonthly || 0) +
     (myTherapy || 0) +
     (partnerTherapy || 0)
@@ -30,7 +29,11 @@ export function calculateBudget(inputs: BudgetInputs): BudgetResult {
   )
 
   const totalExpenses =
-    personalTotal + baseExpenses + mortgageMonthlyOutgoing + investmentPhase1Monthly
+    personalTotal +
+    baseExpenses +
+    mortgageMonthlyOutgoing +
+    investmentPhase1Monthly +
+    (workplacePensionMonthly || 0)
   const remainingBudget = totalIncome - totalExpenses
 
   return {

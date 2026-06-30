@@ -150,6 +150,8 @@ export function calculateWithdrawalStrategy(
     lifeExpectancy: number
     swr: number
     currentAge: number
+    isaPortfolioValue?: number
+    isaYieldAtRetirement?: number
   },
   _config: TaxYearConfig,
 ): WithdrawalStrategy {
@@ -219,6 +221,19 @@ export function calculateWithdrawalStrategy(
       name: 'State Pension',
       annualAmount: args.statePensionAnnual,
       taxFree: false,
+    })
+  }
+
+  if (
+    (args.isaPortfolioValue ?? 0) > 0 &&
+    (args.isaYieldAtRetirement ?? 0) > 0
+  ) {
+    const isaAnnualIncome = args.isaPortfolioValue! * args.isaYieldAtRetirement!
+    annualIncome += isaAnnualIncome
+    sources.push({
+      name: 'ISA/GIA bonds yield',
+      annualAmount: isaAnnualIncome,
+      taxFree: true,
     })
   }
 

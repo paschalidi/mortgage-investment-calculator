@@ -24,6 +24,8 @@ interface PensionProjectionProps {
   personalPot: PersonalPot
   partnerPot: PartnerPot
   retirementAge: number
+  isaPortfolioValue?: number
+  isaYieldAtRetirement?: number
   onWorkplaceChange: (next: WorkplacePot) => void
   onPersonalChange: (next: PersonalPot) => void
   onPartnerChange: (next: PartnerPot) => void
@@ -38,6 +40,8 @@ export function PensionProjection({
   personalPot,
   partnerPot,
   retirementAge,
+  isaPortfolioValue,
+  isaYieldAtRetirement,
   onWorkplaceChange,
   onPersonalChange,
   onPartnerChange,
@@ -81,10 +85,12 @@ export function PensionProjection({
         lifeExpectancy: config.lifeExpectancy,
         swr: config.swr,
         currentAge,
+        isaPortfolioValue,
+        isaYieldAtRetirement,
       },
       config,
     )
-  }, [workplaceProjection, workplacePot.accessMode, workplacePot.retirementAge, personalProjection, personalPot.accessMode, personalPot.retirementAge, config, retirementAge, currentAge])
+  }, [workplaceProjection, workplacePot.accessMode, workplacePot.retirementAge, personalProjection, personalPot.accessMode, personalPot.retirementAge, config, retirementAge, currentAge, isaPortfolioValue, isaYieldAtRetirement])
 
   const totalPotValue = (workplaceProjection?.valueAtRetirement ?? 0) + (personalProjection?.valueAtRetirement ?? 0)
 

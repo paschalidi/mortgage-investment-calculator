@@ -116,8 +116,8 @@ export type BudgetInputs = {
   expenses: Record<string, number>
   mortgageMonthlyOutgoing: number
   investmentPhase1Monthly: number
-  myPensionMonthly: number
   partnerPensionMonthly: number
+  workplacePensionMonthly: number
 }
 
 export type BudgetResult = {

@@ -1,4 +1,5 @@
-import type { InvestmentInputs, InvestmentResult, DividendResult } from './types'
+import type { InvestmentInputs, InvestmentResult, DividendResult, TaxYearConfig } from './types'
+import { DEFAULT_TAX_YEAR_2025_26 } from './tax'
 
 export function calculateInvestmentGrowth(inputs: InvestmentInputs): InvestmentResult {
   const {
@@ -35,46 +36,65 @@ export function calculateInvestmentGrowth(inputs: InvestmentInputs): InvestmentR
   }
 }
 
-export function calculateDividendTax(annualDividendGross: number): DividendResult {
-  const personalAllowance = 12570
-  const dividendAllowance = 500
-  const basicRateLimit = 50270
-  const higherRateLimit = 125140
+export function calculateDividendTax(
+  annualDividendGross: number,
+  otherIncomeNet: number = 0,
+  config: TaxYearConfig = DEFAULT_TAX_YEAR_2025_26,
+): DividendResult {
+  // Step 1: PA available after salary consumes it (with taper on salary)
+  const paAfterTaper = Math.max(
+    0,
+    config.personalAllowance - Math.max(0, (otherIncomeNet - 100000) / 2),
+  )
+  const paAvailableForDividends = Math.max(0, paAfterTaper - otherIncomeNet)
 
-  let taxable = annualDividendGross
-  // Personal allowance absorbs first £12,570
-  taxable = Math.max(0, taxable - personalAllowance)
-  // Dividend allowance absorbs next £500
-  taxable = Math.max(0, taxable - dividendAllowance)
+  // Step 2: Determine which band dividends fall in
+  const basicBandWidth = config.basicRateLimit - config.personalAllowance
+  const basicUsedBySalary = Math.max(
+    0,
+    Math.min(otherIncomeNet - paAfterTaper, basicBandWidth),
+  )
+  const basicRemainingForDividends = Math.max(0, basicBandWidth - basicUsedBySalary)
 
+  const higherBandWidth = config.higherRateLimit - config.basicRateLimit
+  const higherUsedBySalary = Math.max(
+    0,
+    Math.min(otherIncomeNet - config.basicRateLimit, higherBandWidth),
+  )
+  const higherRemainingForDividends = Math.max(0, higherBandWidth - higherUsedBySalary)
+
+  // Step 3: Slice dividends through remaining bands
   let tax = 0
-  // Basic rate band: from 0 up to (basicRateLimit - personalAllowance - dividendAllowance)
-  const basicBand = basicRateLimit - personalAllowance - dividendAllowance
-  const higherBand = higherRateLimit - basicRateLimit
+  let remaining = annualDividendGross
 
-  if (taxable <= basicBand) {
-    tax = taxable * 0.0875
-  } else if (taxable <= basicBand + higherBand) {
-    tax = basicBand * 0.0875 + (taxable - basicBand) * 0.3375
-  } else {
-    tax =
-      basicBand * 0.0875 +
-      higherBand * 0.3375 +
-      (taxable - basicBand - higherBand) * 0.3935
-  }
+  // Dividend allowance first (£500)
+  const allowancePortion = Math.min(remaining, config.dividendAllowance)
+  remaining -= allowancePortion
 
-  const annualTax = tax
-  const annualNet = annualDividendGross - annualTax
-  const monthlyGross = annualDividendGross / 12
-  const monthlyNet = annualNet / 12
-  const effectiveRate = annualDividendGross > 0 ? annualTax / annualDividendGross : 0
+  // Personal allowance for dividends (if any left after salary)
+  const paPortion = Math.min(remaining, paAvailableForDividends)
+  remaining -= paPortion
 
+  // Basic rate portion
+  const basicPortion = Math.min(remaining, basicRemainingForDividends)
+  tax += basicPortion * config.dividendBasicRate
+  remaining -= basicPortion
+
+  // Higher rate portion
+  const higherPortion = Math.min(remaining, higherRemainingForDividends)
+  tax += higherPortion * config.dividendHigherRate
+  remaining -= higherPortion
+
+  // Additional rate (anything left)
+  tax += remaining * config.dividendAdditionalRate
+
+  const annualNet = annualDividendGross - tax
   return {
     annualGross: annualDividendGross,
-    monthlyGross,
-    annualTax,
+    monthlyGross: annualDividendGross / 12,
+    annualTax: tax,
     annualNet,
-    monthlyNet,
-    effectiveRate,
+    monthlyNet: annualNet / 12,
+    effectiveRate: annualDividendGross > 0 ? (tax / annualDividendGross) * 100 : 0,
   }
 }
