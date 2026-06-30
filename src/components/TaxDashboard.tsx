@@ -1,15 +1,3 @@
-import { useMemo } from 'react'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceArea,
-  ReferenceDot,
-} from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +6,6 @@ import {
   calculateIncomeTax,
   calculateTakeHome,
   calculateANI,
-  generateMarginalRateCurve,
   costOfOnePoundOver100k,
 } from '@/lib/calculations/tax'
 import { calculateAutoSacrifice } from '@/lib/calculations/pension'
@@ -37,8 +24,6 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value)
 }
 
-const formatPct = (value: number) => `${value.toFixed(1)}%`
-
 export function TaxDashboard({
   grossSalary,
   pensionSacrifice,
@@ -50,20 +35,9 @@ export function TaxDashboard({
   const ani = calculateANI(grossSalary, pensionSacrifice, config)
   const { ni, takeHomeAnnual, takeHomeMonthly } = calculateTakeHome(ani, config)
   const { bands } = calculateIncomeTax(ani, config)
-  const curve = useMemo(
-    () => generateMarginalRateCurve(config, [50000, 150000], 500),
-    [config],
-  )
   const trapZoneEnd = 100000 + config.personalAllowance * 2
 
   const costOfOnePound = costOfOnePoundOver100k(config, childcareValueAnnual)
-
-  // Find the curve point closest to ANI for the reference dot
-  const aniPoint = curve.reduce(
-    (closest, point) =>
-      Math.abs(point.income - ani) < Math.abs(closest.income - ani) ? point : closest,
-    curve[0],
-  )
 
   // NI breakdown
   const niMain = Math.min(
@@ -76,9 +50,8 @@ export function TaxDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* 5a. Salary & ANI Input Card */}
-        <Card>
+      {/* 5a. Salary & ANI Input Card */}
+      <Card>
           <CardHeader>
             <CardTitle>Salary & ANI</CardTitle>
             <CardDescription>Enter your gross salary and pension sacrifice to see take-home pay.</CardDescription>
@@ -176,86 +149,6 @@ export function TaxDashboard({
             </div>
           </CardContent>
         </Card>
-
-        {/* 5b. Marginal Rate Curve Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Marginal Tax Rate Curve</CardTitle>
-            <CardDescription>See how your marginal and effective tax rates change with income.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={curve} margin={{ top: 5, right: 20, bottom: 20, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="income"
-                    type="number"
-                    domain={[50000, 150000]}
-                    tickFormatter={(v: number) => `£${(v / 1000).toFixed(0)}k`}
-                    label={{ value: 'Income (£)', position: 'insideBottom', offset: -10 }}
-                  />
-                  <YAxis
-                    domain={[0, 70]}
-                    tickFormatter={(v: number) => `${v}%`}
-                    label={{ value: 'Rate (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [formatPct(value as number), name]}
-                    labelFormatter={(label) => `Income: ${formatCurrency(label as number)}`}
-                  />
-                  <ReferenceArea
-                    x1={100000}
-                    x2={trapZoneEnd}
-                    strokeOpacity={0.3}
-                    fill="red"
-                    fillOpacity={0.1}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="marginalRate"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Marginal Rate"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="effectiveRate"
-                    stroke="#6b7280"
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Effective Rate"
-                  />
-                  <ReferenceDot
-                    x={aniPoint.income}
-                    y={aniPoint.marginalRate}
-                    r={6}
-                    fill="#2563eb"
-                    stroke="white"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-1 bg-blue-600" />
-                <span>Marginal rate</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-1 bg-gray-500 border-dashed border-t" />
-                <span>Effective rate</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-red-300/30 rounded" />
-                <span>60% trap zone</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* 5c. 60% Trap Callout Card */}
       <Card className={ani >= 100000 ? 'border-red-300 bg-red-50/50' : 'border-green-300 bg-green-50/50'}>
