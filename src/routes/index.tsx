@@ -3,6 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import {
+  calculateMortgage,
+  calculateInvestmentGrowth,
+  calculateDividendTax,
+  calculateBudget,
+  calculateAgeAtEnd,
+} from '@/lib/calculations'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -52,135 +59,72 @@ function Index() {
   const [dividendYield, setDividendYield] = useLocalStorage<number>('dividendYield', 4.0)
 
   // --- Mortgage Calculations ---
-  // Monthly interest rate
-  const r_m = interestRate / 100 / 12
-  // Total number of payments
-  const n = years * 12
-
-  // Standard monthly payment (M = P [ i(1 + i)^n ] / [ (1 + i)^n - 1])
-  const standardMonthlyPayment = r_m > 0 ? principal * (r_m * Math.pow(1 + r_m, n)) / (Math.pow(1 + r_m, n) - 1) : principal / (n || 1)
-
-  const totalMonthlyPayment = standardMonthlyPayment + overpayment;
-
-  // Calculate payoff time and total interest with overpayment
-  let remainingBalance = principal
-  let monthsToPayoff = 0
-  let totalInterestWithOverpayment = 0
-  let totalPaidWithOverpayment = 0
-
-  while (remainingBalance > 0 && monthsToPayoff < 1200) { // cap at 100 years
-    const interestForMonth = remainingBalance * r_m
-    totalInterestWithOverpayment += interestForMonth
-
-    let principalPayment = totalMonthlyPayment - interestForMonth
-
-    // If payment doesn't cover interest, loan will never be paid off
-    if (principalPayment <= 0) {
-      monthsToPayoff = -1;
-      break;
-    }
-
-    if (principalPayment > remainingBalance) {
-      principalPayment = remainingBalance
-      totalPaidWithOverpayment += (remainingBalance + interestForMonth)
-    } else {
-      totalPaidWithOverpayment += totalMonthlyPayment
-    }
-
-    remainingBalance -= principalPayment
-    monthsToPayoff++
-  }
-
-  const standardTotalInterest = (standardMonthlyPayment * n) - principal
-  const standardTotalPaid = standardMonthlyPayment * n
-
-  const interestSaved = standardTotalInterest - totalInterestWithOverpayment
-  const yearsSaved = years - (monthsToPayoff / 12)
+  const {
+    standardMonthlyPayment,
+    totalMonthlyPayment,
+    monthsToPayoff,
+    totalInterestWithOverpayment,
+    totalPaidWithOverpayment,
+    standardTotalInterest,
+    standardTotalPaid,
+    interestSaved,
+    yearsSaved,
+  } = calculateMortgage({
+    principal,
+    annualRate: interestRate,
+    years,
+    monthlyOverpayment: overpayment,
+  })
 
   // --- Investment Calculations ---
-  const r_im = invReturnRate / 100 / 12
   const totalInvMonths = invTermYears * 12
 
-  let invBalance = invInitial
-  let invTotalContributed = invInitial
-  let invTotalInterest = 0
-
-  for (let month = 1; month <= totalInvMonths; month++) {
-    const isMortgagePaidOff = monthsToPayoff !== -1 && month > monthsToPayoff;
-    const C = isMortgagePaidOff ? invPhase2Contrib : invPhase1Contrib;
-
-    const I = invBalance * r_im;
-
-    invTotalInterest += I;
-    invTotalContributed += C;
-    invBalance += I + C;
-  }
+  const {
+    finalBalance: invBalance,
+    totalContributed: invTotalContributed,
+    totalInterest: invTotalInterest,
+  } = calculateInvestmentGrowth({
+    initial: invInitial,
+    annualReturnRate: invReturnRate,
+    phase1Monthly: invPhase1Contrib,
+    phase2Monthly: invPhase2Contrib,
+    termYears: invTermYears,
+    monthsToPayoffMortgage: monthsToPayoff,
+  })
 
   // --- Dividend & UK Tax Calculations ---
-  const annualDividendGross = invBalance * (dividendYield / 100);
-  const monthlyDividendGross = annualDividendGross / 12;
+  const annualDividendGross = invBalance * (dividendYield / 100)
+  const monthlyDividendGross = annualDividendGross / 12
 
-  // UK tax on dividends assuming NO other income (2024/25 rates)
-  // Personal Allowance: £12,570 (covers dividends if no other income)
-  // Dividend Allowance: £500 (on top of personal allowance)
-  // Basic rate band: £12,571 – £50,270 → 8.75%
-  // Higher rate band: £50,271 – £125,140 → 33.75%
-  // Additional rate: £125,141+ → 39.35%
-  const calculateDividendTax = (annual: number) => {
-    const personalAllowance = 12570;
-    const dividendAllowance = 500;
-    const basicRateLimit = 50270;
-    const higherRateLimit = 125140;
-
-    let taxable = annual;
-    // Personal allowance absorbs first £12,570
-    taxable = Math.max(0, taxable - personalAllowance);
-    // Dividend allowance absorbs next £500
-    taxable = Math.max(0, taxable - dividendAllowance);
-
-    let tax = 0;
-    // Basic rate band: from 0 up to (basicRateLimit - personalAllowance - dividendAllowance)
-    const basicBand = basicRateLimit - personalAllowance - dividendAllowance;
-    const higherBand = higherRateLimit - basicRateLimit;
-
-    if (taxable <= basicBand) {
-      tax = taxable * 0.0875;
-    } else if (taxable <= basicBand + higherBand) {
-      tax = basicBand * 0.0875 + (taxable - basicBand) * 0.3375;
-    } else {
-      tax = basicBand * 0.0875 + higherBand * 0.3375 + (taxable - basicBand - higherBand) * 0.3935;
-    }
-    return tax;
-  };
-
-  const annualDividendTax = calculateDividendTax(annualDividendGross);
-  const annualDividendNet = annualDividendGross - annualDividendTax;
-  const monthlyDividendNet = annualDividendNet / 12;
+  const {
+    annualTax: annualDividendTax,
+    annualNet: annualDividendNet,
+    monthlyNet: monthlyDividendNet,
+  } = calculateDividendTax(annualDividendGross)
 
   // --- Budget Calculations ---
-  const totalIncome = myIncome + partnerIncome;
-  const personalTotal = (myPersonalExpenses || 0) + (partnerPersonalExpenses || 0) + (myPension || 0) + (partnerPension || 0) + (myTherapy || 0) + (partnerTherapy || 0);
-  const baseExpenses = Object.values(expenses).reduce((acc, val) => acc + (val || 0), 0);
-  const totalExpenses = personalTotal + baseExpenses + totalMonthlyPayment + invPhase1Contrib;
-  const remainingBudget = totalIncome - totalExpenses;
+  const {
+    totalIncome,
+    baseExpenses,
+    totalExpenses,
+    remainingBudget,
+  } = calculateBudget({
+    myIncomeMonthly: myIncome,
+    partnerIncomeMonthly: partnerIncome,
+    myPersonalExpenses,
+    partnerPersonalExpenses,
+    myTherapy,
+    partnerTherapy,
+    expenses,
+    mortgageMonthlyOutgoing: totalMonthlyPayment,
+    investmentPhase1Monthly: invPhase1Contrib,
+    myPensionMonthly: myPension,
+    partnerPensionMonthly: partnerPension,
+  })
 
   // --- Age Calculations ---
-  const calculateAgeAtEnd = (dobString: string, monthsToAdd: number) => {
-    if (!dobString) return null;
-    const birthDate = new Date(dobString);
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + monthsToAdd);
-    
-    let age = endDate.getFullYear() - birthDate.getFullYear();
-    const m = endDate.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && endDate.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const myEndAge = calculateAgeAtEnd(myDob, totalInvMonths);
-  const partnerEndAge = calculateAgeAtEnd(partnerDob, totalInvMonths);
+  const myEndAge = calculateAgeAtEnd(myDob, totalInvMonths)
+  const partnerEndAge = calculateAgeAtEnd(partnerDob, totalInvMonths)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value)
