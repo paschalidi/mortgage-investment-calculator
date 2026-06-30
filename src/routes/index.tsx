@@ -90,7 +90,7 @@ function Index() {
 
   // Investment State
   const [invInitial, setInvInitial] = useLocalStorage<number>('invInitial', 80000)
-  const [invReturnRate, setInvReturnRate] = useLocalStorage<number>('invReturnRate', 8.00)
+  const [invReturnRate, setInvReturnRate] = useLocalStorage<number>('invReturnRate', 5.00)
   const [invPhase1Contrib, setInvPhase1Contrib] = useLocalStorage<number>('invPhase1Contrib', 1000)
   const [invPhase2Contrib, setInvPhase2Contrib] = useLocalStorage<number>('invPhase2Contrib', 3000)
   const [invTermYears, setInvTermYears] = useLocalStorage<number>('invTermYears', 20)
