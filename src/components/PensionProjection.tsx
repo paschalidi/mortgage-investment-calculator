@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { WorkplacePotCard, PersonalPotCard } from './PensionPotCard'
+import { Glossary } from './Glossary'
 import { RetirementIncomeSummary } from './RetirementIncomeSummary'
 import {
   projectWorkplacePot,
@@ -159,6 +160,8 @@ export function PensionProjection({
           <span className="text-sm text-muted-foreground">(projections recalculate live)</span>
         </div>
       </div>
+
+      <Glossary />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <WorkplacePotCard
