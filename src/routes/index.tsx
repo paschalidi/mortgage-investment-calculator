@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,10 +10,14 @@ import {
   calculateDividendTax,
   calculateBudget,
   calculateAgeAtEnd,
+  calculateANI,
+  calculateTakeHome,
   DEFAULT_TAX_YEAR_2025_26,
 } from '@/lib/calculations'
 import { AssumptionsPanel } from '@/components/AssumptionsPanel'
 import { TaxDashboard } from '@/components/TaxDashboard'
+import { PensionProjection } from '@/components/PensionProjection'
+import type { WorkplacePot, PersonalPot, PartnerPot } from '@/lib/calculations'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -65,6 +70,41 @@ function Index() {
   const [grossSalary, setGrossSalary] = useLocalStorage<number>('grossSalary', 110000)
   const [pensionSacrifice, setPensionSacrifice] = useLocalStorage<number>('pensionSacrifice', 11000)
   const [taxConfig, setTaxConfig] = useLocalStorage('taxConfig', DEFAULT_TAX_YEAR_2025_26)
+
+  // Pension State
+  const [workplacePot, setWorkplacePot] = useLocalStorage<WorkplacePot>('workplacePot', {
+    currentValue: 2000,
+    monthlySacrifice: 916.67,
+    employerMatchPercent: 5,
+    matchBaseSalary: 110000,
+    realGrowthRate: 0.04,
+    amc: 0.003,
+    contributionCharge: 0.018,
+    accessMode: 'drawdown',
+    retirementAge: 57,
+  })
+  const [personalPot, setPersonalPot] = useLocalStorage<PersonalPot>('personalPot', {
+    currentValue: 40000,
+    monthlyContribution: 400,
+    realGrowthRate: 0.04,
+    startYear: 2019,
+    ukTaxRelief: false,
+    accessMode: 'locked',
+    retirementAge: 67,
+  })
+  const [partnerPot, setPartnerPot] = useLocalStorage<PartnerPot>('partnerPot', {
+    monthlyContribution: 0,
+  })
+  const [retirementAge, setRetirementAge] = useLocalStorage<number>('retirementAge', 57)
+
+  // --- Derived: My Income from Tax Engine ---
+  useEffect(() => {
+    const ani = calculateANI(grossSalary, pensionSacrifice, taxConfig)
+    const { takeHomeMonthly } = calculateTakeHome(ani, taxConfig)
+    if (Math.abs(takeHomeMonthly - myIncome) > 0.01) {
+      setMyIncome(takeHomeMonthly)
+    }
+  }, [grossSalary, pensionSacrifice, taxConfig, myIncome, setMyIncome])
 
   // --- Mortgage Calculations ---
   const {
@@ -151,9 +191,22 @@ function Index() {
 
       <AssumptionsPanel config={taxConfig} onChange={setTaxConfig} />
 
+      {/* Tax & ANI Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 1: Salary, Tax & Take-Home</h2>
+        <TaxDashboard
+          grossSalary={grossSalary}
+          pensionSacrifice={pensionSacrifice}
+          config={taxConfig}
+          childcareValueAnnual={expenses.childcare * 12}
+          onGrossSalaryChange={setGrossSalary}
+          onPensionSacrificeChange={setPensionSacrifice}
+        />
+      </div>
+
       {/* Budget Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 1: Monthly Budget</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 2: Monthly Budget</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -165,13 +218,11 @@ function Index() {
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Income</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="myIncome">My Income (£)</Label>
-                    <Input 
-                      id="myIncome" 
-                      type="number" 
-                      value={myIncome === 0 ? '' : myIncome} 
-                      onChange={(e) => setMyIncome(Number(e.target.value))}
-                    />
+                    <Label htmlFor="myIncome">My Net Monthly Income</Label>
+                    <div className="p-2 bg-muted/40 rounded-md border text-sm font-medium">
+                      {formatCurrency(myIncome)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Derived from Part 1 salary & tax engine.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="partnerIncome">Partner's Income (£)</Label>
@@ -329,7 +380,7 @@ function Index() {
 
       {/* Mortgage Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 2: Mortgage Amortization</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 3: Mortgage Amortization</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -471,7 +522,7 @@ function Index() {
 
       {/* Investment Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 3: Investment Growth</h2>
+        <h2 className="text-2xl font-semibold border-b pb-2">Part 4: Investment Growth</h2>
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -691,18 +742,20 @@ function Index() {
         </div>
       </div>
 
-      {/* Tax & ANI Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Part 5: Tax & ANI Engine</h2>
-        <TaxDashboard
-          grossSalary={grossSalary}
-          pensionSacrifice={pensionSacrifice}
-          config={taxConfig}
-          childcareValueAnnual={expenses.childcare * 12}
-          onGrossSalaryChange={setGrossSalary}
-          onPensionSacrificeChange={setPensionSacrifice}
-        />
-      </div>
+      {/* Pension Projection Section */}
+      <PensionProjection
+        grossSalary={grossSalary}
+        config={taxConfig}
+        dob={myDob}
+        workplacePot={workplacePot}
+        personalPot={personalPot}
+        partnerPot={partnerPot}
+        retirementAge={retirementAge}
+        onWorkplaceChange={setWorkplacePot}
+        onPersonalChange={setPersonalPot}
+        onPartnerChange={setPartnerPot}
+        onRetirementAgeChange={setRetirementAge}
+      />
 
     </div>
   )

@@ -69,25 +69,25 @@ export function projectPersonalPot(
   const totalFutureMonths = yearsToRetirement * 12
   const monthlyRate = pot.realGrowthRate / 12
 
-  let balance: number
-  let totalContributed: number
+  let balance = 0
+  let totalContributed = 0
   let totalGrowth = 0
 
-  if (pot.currentValue > 0) {
-    balance = pot.currentValue
-    totalContributed = 0
-  } else {
-    const pastMonths = (currentYear - pot.startYear) * 12
-    balance = 0
-    totalContributed = 0
-    for (let month = 0; month < pastMonths; month++) {
-      const growth = (balance + pot.monthlyContribution) * monthlyRate
-      balance += pot.monthlyContribution + growth
-      totalContributed += pot.monthlyContribution
-      totalGrowth += growth
-    }
+  // Past phase: reconstruct from startYear to currentYear (for contributed/growth accounting)
+  const pastMonths = (currentYear - pot.startYear) * 12
+  for (let month = 0; month < pastMonths; month++) {
+    const growth = (balance + pot.monthlyContribution) * monthlyRate
+    balance += pot.monthlyContribution + growth
+    totalContributed += pot.monthlyContribution
+    totalGrowth += growth
   }
 
+  // If user provided a currentValue > 0, use it as ground truth for future projection
+  if (pot.currentValue > 0) {
+    balance = pot.currentValue
+  }
+
+  // Future phase: project forward yearsToRetirement
   for (let month = 0; month < totalFutureMonths; month++) {
     const growth = (balance + pot.monthlyContribution) * monthlyRate
     balance += pot.monthlyContribution + growth
@@ -212,7 +212,7 @@ export function calculateWithdrawalStrategy(
   processPot(args.workplace, 'Workplace')
   processPot(args.personal, 'Personal')
 
-  if (args.currentAge >= args.statePensionAge) {
+  if (args.retirementAge >= args.statePensionAge) {
     annualIncome += args.statePensionAnnual
     taxableIncome += args.statePensionAnnual
     sources.push({

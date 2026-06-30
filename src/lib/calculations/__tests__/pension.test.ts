@@ -113,9 +113,9 @@ describe('projectPersonalPot', () => {
     }
     const result = projectPersonalPot(pot, 2026, 67, '1992-02-16', 34)
     expect(result.yearsToRetirement).toBe(33)
-    expect(result.totalContributed).toBeCloseTo(158400, 0)
+    expect(result.totalContributed).toBeCloseTo(192000, 0)
     expect(result.valueAtRetirement).toBeGreaterThan(
-      40000 + result.totalContributed,
+      40000 + 158400,
     )
     // Snapshot: substantial value after 33 years of £400/mo + £40k start @ 4%
     expect(result.valueAtRetirement).toBeCloseTo(478728.2, 1)
@@ -184,7 +184,7 @@ describe('projectPersonalPot', () => {
       full.valueAtRetirement,
       0,
     )
-    expect(forward.totalContributed).toBeCloseTo(158400, 0)
+    expect(forward.totalContributed).toBeCloseTo(192000, 0)
   })
 })
 
