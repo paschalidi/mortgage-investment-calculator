@@ -20,6 +20,8 @@ export type TaxYearConfig = {
   additionalRate: number
   niPrimaryThreshold: number
   niRate: number
+  niUpperEarningsLimit: number
+  niUpperRate: number
   dividendAllowance: number
   dividendBasicRate: number
   dividendHigherRate: number
@@ -124,4 +126,11 @@ export type BudgetResult = {
   baseExpenses: number
   totalExpenses: number
   remainingBudget: number
+}
+
+export type MarginalRatePoint = {
+  income: number
+  marginalRate: number
+  effectiveRate: number
+  inTrap: boolean
 }
