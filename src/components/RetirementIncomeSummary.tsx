@@ -68,6 +68,7 @@ function PhaseCard({
             <div className="text-2xl font-bold text-green-700 dark:text-green-400">
               {formatCurrency(phase.totalNetMonthly)}
             </div>
+            <div className="text-xs text-muted-foreground mt-0.5">in today's money</div>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Effective tax rate</span>
@@ -115,6 +116,7 @@ export function RetirementIncomeSummary({
               <div className="text-2xl font-bold text-primary">
                 {formatCurrency(lifetime.totalPotAtRetirement)}
               </div>
+              <div className="text-xs text-muted-foreground mt-0.5">in today's money</div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -140,9 +142,12 @@ export function RetirementIncomeSummary({
                   <span className="text-muted-foreground">
                     Die at age {scenario.dieAtAge}
                   </span>
-                  <span className="font-semibold">
-                    {formatCurrency(scenario.remainingPot)}
-                  </span>
+                  <div className="text-right">
+                    <span className="font-semibold">
+                      {formatCurrency(scenario.remainingPot)}
+                    </span>
+                    <div className="text-xs text-muted-foreground mt-0.5">in today's money</div>
+                  </div>
                 </div>
               ))}
             </div>

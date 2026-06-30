@@ -114,9 +114,9 @@ function Index() {
     retirementAge: 57,
   })
   const [personalPot, setPersonalPot] = useLocalStorage<PersonalPot>('personalPot', {
-    currentValue: 40000,
+    currentValue: 40000,             // ~7 yrs of £400/mo @ 4%
     monthlyContribution: 400,
-    realGrowthRate: 0.04,
+    realGrowthRate: 0.02,            // Generali Rentenversicherung: 2-4% nominal - 2.5% inflation
     startYear: 2019,
     ukTaxRelief: false,
     accessMode: 'drawdown',
@@ -645,7 +645,7 @@ function Index() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="invReturnRate">Annual Return Rate (%)</Label>
+                  <Label htmlFor="invReturnRate">Real Annual Return (post-inflation) %</Label>
                   <Input
                     id="invReturnRate"
                     type="number"

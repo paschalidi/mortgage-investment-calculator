@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { WorkplacePotCard, PersonalPotCard } from './PensionPotCard'
 import { Glossary } from './Glossary'
 import { RetirementIncomeSummary } from './RetirementIncomeSummary'
+import { HelpTip } from './HelpTip'
 import {
   projectWorkplacePot,
   projectPersonalPot,
@@ -158,6 +159,10 @@ export function PensionProjection({
             onChange={(e) => onRetirementAgeChange(Number(e.target.value))}
           />
           <span className="text-sm text-muted-foreground">(projections recalculate live)</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>All projections shown in today's money (inflation-adjusted).</span>
+          <HelpTip content="Real return = nominal investment return MINUS inflation. £1M shown in 2049 = same purchasing power as £1M today. Edit inflation rate in the Assumptions panel (default 2.5%)." />
         </div>
       </div>
 
