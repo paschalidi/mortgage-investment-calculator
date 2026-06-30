@@ -134,3 +134,50 @@ export type MarginalRatePoint = {
   effectiveRate: number
   inTrap: boolean
 }
+
+export interface WorkplacePot {
+  currentValue: number
+  monthlySacrifice: number
+  employerMatchPercent: number
+  matchBaseSalary: number
+  realGrowthRate: number
+  amc: number
+  contributionCharge: number
+  accessMode: 'drawdown' | 'annuity' | 'lump_sum' | 'locked'
+  retirementAge: number
+}
+
+export interface PersonalPot {
+  currentValue: number
+  monthlyContribution: number
+  realGrowthRate: number
+  startYear: number
+  ukTaxRelief: boolean
+  accessMode: 'drawdown' | 'annuity' | 'lump_sum' | 'locked'
+  retirementAge: number
+}
+
+export interface PartnerPot {
+  monthlyContribution: number
+}
+
+export interface PotProjection {
+  valueAtRetirement: number
+  totalContributed: number
+  totalGrowth: number
+  yearsToRetirement: number
+}
+
+export interface WithdrawalStrategy {
+  annualIncome: number
+  taxFreeLumpSum: number
+  taxableIncome: number
+  drawdownRunwayYears: number
+  sources: Array<{ name: string; annualAmount: number; taxFree: boolean }>
+}
+
+export interface AutoSacrificeResult {
+  monthlySacrifice: number
+  annualSacrifice: number
+  cappedByAnnualAllowance: boolean
+}
